@@ -5,10 +5,10 @@ RUN apk --no-cache add bash ca-certificates curl git jq openssh && update-ca-cer
 RUN pip --no-cache-dir install "https://packages.nebula.puppet.net/sdk/support/python/v1/nebula_sdk-1-py3-none-any.whl"
 RUN pip --no-cache-dir install boto3
 
-COPY "./step.py" "/nebula/s3-step-delete-public-access-block.py"
+COPY "./step.py" "/nebula/s3-step-put-bucket-acl.py"
 ENTRYPOINT []
-CMD ["python3", "/nebula/s3-step-delete-public-access-block.py"]
+CMD ["python3", "/nebula/s3-step-put-bucket-acl.py"]
 
-LABEL "org.opencontainers.image.title"="Deletes bucket's public block"
-LABEL "org.opencontainers.image.description"="This task deletes bucket's public block."
+LABEL "org.opencontainers.image.title"="Sets the permissions on an existing bucket using access control lists (ACL)."
+LABEL "org.opencontainers.image.description"="This task sets the permissions on an existing bucket using access control lists (ACL)."
 LABEL "com.puppet.nebula.sdk.version"="v1"

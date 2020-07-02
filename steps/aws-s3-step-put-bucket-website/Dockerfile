@@ -5,9 +5,9 @@ RUN apk --no-cache add bash ca-certificates curl git jq openssh && update-ca-cer
 RUN pip --no-cache-dir install "https://packages.nebula.puppet.net/sdk/support/python/v1/nebula_sdk-1-py3-none-any.whl"
 RUN pip --no-cache-dir install boto3
 
-COPY "./step.py" "/nebula/s3-step-bucketwebsite-create.py"
+COPY "./step.py" "/nebula/s3-step-put-bucket-website.py"
 ENTRYPOINT []
-CMD ["python3", "/nebula/s3-step-bucketwebsite-create.py"]
+CMD ["python3", "/nebula/s3-step-put-bucket-website.py"]
 
 LABEL "org.opencontainers.image.title"="Check domain availability"
 LABEL "org.opencontainers.image.description"="This task checks domain availability."

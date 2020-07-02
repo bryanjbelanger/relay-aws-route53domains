@@ -1,0 +1,131 @@
+parameters:
+  domainName:
+    description: 'The domain name'
+    default: 'test001.us'
+  indexDocumentSuffix:
+    description: 'A suffix that is appended to a request that is for a directory on the website endpoint.'
+    default: 'index.html'
+  errorDocumentKey:
+    description: 'The object key name to use when a 4XX class error occurs.'
+    default: 'error.html'
+  loggingTargetPrefix:
+    description: 'A prefix for all log object keys.'
+    default: 'logs/'
+
+steps:
+- name: create-s3-root-domain-bucket
+  image: relaysh/aws-s3-step-bucket-create
+  spec:
+    aws: &aws
+      connection: !Connection { type: aws, name: my-aws-account } 
+      region: us-east-1
+    name: !Parameter domainName
+
+- name: create-s3-subdomain-bucket
+  image: relaysh/aws-s3-step-bucket-create
+  spec:
+    aws: *aws
+    name: !Fn.concat ["www.", !Parameter domainName]
+
+- name: create-s3-logging-bucket
+  image: relaysh/aws-s3-step-bucket-create
+  spec:
+    aws: *aws
+    name: !Fn.concat ["logs.", !Parameter domainName]
+
+- name: create-s3-root-website-bucket
+  image: bryanjbelanger/aws-s3-step-put-bucket-website 
+  spec:
+    aws: *aws
+    bucketName: !Parameter domainName
+  dependsOn:
+    - create-s3-root-domain-bucket
+
+- name: create-s3-subdomain-website-bucket
+  image: bryanjbelanger/aws-s3-step-put-bucket-website
+  spec:
+    aws: *aws
+    bucketName: !Fn.concat ["www.", !Parameter domainName]
+    redirectAllRequestsToHostName: !Parameter domainName
+  dependsOn:
+    - create-s3-subdomain-bucket
+
+
+- name: create-s3-root-delete-public-block
+  image: bryanjbelanger/aws-s3-step-delete-public-access-block
+  spec:
+    aws: *aws
+    bucketName: !Parameter domainName
+  dependsOn:
+    - create-s3-root-website-bucket
+
+- name: create-s3-logging-acl
+  image: bryanjbelanger/aws-s3-step-put-bucket-acl
+  spec:
+    aws: *aws
+    bucketName: !Fn.concat ["logs.", !Parameter domainName]
+    acl: ''
+    grantFullControl: ''
+    grantRead: ''
+    grantReadACP: ''
+    grantWrite: ''
+    grantWriteACP: ''
+    accessControlPolicyGrants:
+      - Grantee:
+          Type: "Group"
+          URI: "http://acs.amazonaws.com/groups/s3/LogDelivery"
+        Permission: "WRITE"
+      - Grantee:
+          Type: "Group"
+          URI: "http://acs.amazonaws.com/groups/s3/LogDelivery"
+        Permission: "READ_ACP"
+    accessControlPolicyOwner: ''
+  dependsOn:
+    - create-s3-logging-bucket
+
+- name: create-s3-set-root-logging-bucket
+  image: bryanjbelanger/aws-s3-step-put-bucket-logging
+  spec:
+    aws: *aws
+    bucketName: !Parameter domainName
+    targetBucket: !Fn.concat ["logs.", !Parameter domainName]
+    targetPrefix: !Parameter loggingTargetPrefix
+  dependsOn:
+    - create-s3-root-website-bucket
+    - create-s3-logging-acl
+
+- name: upload-index-file
+  image: relaysh/aws-s3-step-bucket-upload-content
+  spec:
+    aws: *aws
+    bucket: !Parameter domainName
+    key: 'index.html'
+    sourceContent: |
+      <html xmlns="http://www.w3.org/1999/xhtml" >
+      <head>
+          <title>My Website Home Page</title>
+      </head>
+      <body>
+        <h1>Welcome to my website</h1>
+        <p>Now hosted on Amazon S3!</p>
+      </body>
+      </html>
+  dependsOn:
+    - create-s3-root-website-bucket
+
+- name: create-s3-set-root-bucket-policy
+  image: bryanjbelanger/aws-s3-step-put-bucket-policy
+  spec:
+    aws: *aws
+    bucketName: !Parameter domainName
+    policy:
+      Version: "2020-07-01"
+      Statement:
+        Sid: "PublicReadGetObject"
+        Effect: "Allow"
+        Action:
+          - "s3:GetObject"
+        Resource:
+          - !Fn.concat ["arn:aws:s3:::", !Parameter domainName, "/*"]
+  dependsOn:
+    - create-s3-root-website-bucket

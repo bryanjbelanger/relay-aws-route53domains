@@ -18,12 +18,12 @@ sess = boto3.Session(
 
 s3 = sess.client('s3')
 
-# region = relay.get(D.aws.region)
 bucketName = relay.get(D.bucketName)
+policy = relay.get(D.policy)
 
 try:
-  response = s3.delete_public_access_block(Bucket=bucketName)
+  response = s3.put_bucket_policy(Bucket=bucketName,Policy=policy)
 
-  print ("Dropped public block from bucket website {}".format(bucketName))
+  print ("Added policy for bucket {}".format(bucketName))
 except Exception as e: 
   print (e)

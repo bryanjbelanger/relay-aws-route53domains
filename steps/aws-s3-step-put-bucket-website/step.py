@@ -18,7 +18,7 @@ sess = boto3.Session(
 
 s3 = sess.client('s3')
 
-region = relay.get(D.aws.region)
+# region = relay.get(D.aws.region)
 bucketName = relay.get(D.bucketName)
 
 if D.redirectAllRequestsToHostName:
@@ -28,17 +28,6 @@ else:
 
 if redirectAllRequestsToHostName:
   try:
-    # Workaround for https://github.com/boto/boto3/issues/125
-    if region == 'us-east-1':
-      response = s3.create_bucket(
-          Bucket=bucketName
-      )
-    else:
-      response = s3.create_bucket(
-          Bucket=bucketName,
-          CreateBucketConfiguration={ 'LocationConstraint': region }
-      )
-
     # bucket_website = s3.BucketWebsite(bucketName)
     websiteConfiguration = {
       'RedirectAllRequestsTo' : { 'HostName': redirectAllRequestsToHostName}
@@ -51,17 +40,6 @@ if redirectAllRequestsToHostName:
     print (e)
 else:
   try:
-    # Workaround for https://github.com/boto/boto3/issues/125
-    if region == 'us-east-1':
-      response = s3.create_bucket(
-          Bucket=bucketName
-      )
-    else:
-      response = s3.create_bucket(
-          Bucket=bucketName,
-          CreateBucketConfiguration={ 'LocationConstraint': region }
-      )
-
     # bucket_website = s3.BucketWebsite(bucketName)
     websiteConfiguration = {
       'ErrorDocument' : { 'Key': 'error.html'},
