@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 import boto3
-import json
-
 from nebula_sdk import Interface, Dynamic as D
 
 relay = Interface()
@@ -21,11 +19,15 @@ sess = boto3.Session(
 s3 = sess.client('s3')
 
 bucketName = relay.get(D.bucketName)
-policy = json.dumps(relay.get(D.policy))
+key = relay.get(D.key)
+sourceContent = relay.get(D.sourceContent)
+
+tmpFile = open(key,"w")
+tmpFile.write(sourceContent)
 
 try:
-  response = s3.put_bucket_policy(Bucket=bucketName,Policy=policy)
+  response = s3_client.upload_file(key, bucketName, key)
 
-  print ("Added policy for bucket {}".format(bucketName))
+  print ("Upload response {}".format(response))
 except Exception as e: 
   print (e)

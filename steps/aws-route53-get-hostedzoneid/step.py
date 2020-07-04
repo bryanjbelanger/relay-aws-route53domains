@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 import boto3
-import json
-
 from nebula_sdk import Interface, Dynamic as D
 
 relay = Interface()
@@ -15,17 +13,20 @@ except:
 sess = boto3.Session(
   aws_access_key_id=relay.get(D.aws.connection.accessKeyID),
   aws_secret_access_key=relay.get(D.aws.connection.secretAccessKey),
+  region_name=relay.get(D.aws.region),
   aws_session_token=session_token
 )
 
-s3 = sess.client('s3')
+route53 = sess.client('route53')
 
-bucketName = relay.get(D.bucketName)
-policy = json.dumps(relay.get(D.policy))
+dnsName = relay.get(D.dnsName)
 
-try:
-  response = s3.put_bucket_policy(Bucket=bucketName,Policy=policy)
+host_zones_response = route53.list_hosted_zones_by_name(DNSName=dnsName)
 
-  print ("Added policy for bucket {}".format(bucketName))
-except Exception as e: 
-  print (e)
+hostedZoneId = host_zones_response['HostedZones'][0]['Id']
+
+# hostedZoneIdSubstring = hostedZoneId.split('/')[2]
+
+print('HostedZoneId: {}'.format(hostedZoneId))
+
+relay.outputs.set('hostedZoneId', hostedZoneId)

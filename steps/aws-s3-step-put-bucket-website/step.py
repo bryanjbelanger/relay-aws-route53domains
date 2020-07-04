@@ -21,10 +21,9 @@ s3 = sess.client('s3')
 # region = relay.get(D.aws.region)
 bucketName = relay.get(D.bucketName)
 
-if D.redirectAllRequestsToHostName:
-  redirectAllRequestsToHostName = None
-else:
-  redirectAllRequestsToHostName = relay.get(D.redirectAllRequestsToHostName)
+redirectAllRequestsToHostName = relay.get(D.redirectAllRequestsToHostName)
+
+print ("Redirect all requests value {}".format(redirectAllRequestsToHostName))
 
 if redirectAllRequestsToHostName:
   try:
@@ -35,7 +34,7 @@ if redirectAllRequestsToHostName:
 
     response = s3.put_bucket_website(Bucket=bucketName,WebsiteConfiguration=websiteConfiguration)
 
-    print ("Created bucket website {}".format(bucketName))
+    print ("Created redirect bucket website {} to {}".format(bucketName, redirectAllRequestsToHostName))
   except Exception as e: 
     print (e)
 else:

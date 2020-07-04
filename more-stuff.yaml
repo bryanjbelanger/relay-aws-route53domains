@@ -11,55 +11,58 @@ parameters:
   loggingTargetPrefix:
     description: 'A prefix for all log object keys.'
     default: 'logs/'
+  awsRegion:
+    description: 'The aws region to work in.'
+    default: 'us-east-1'
 
 steps:
-- name: create-s3-root-domain-bucket
+- name: "Create Root Bucket"
   image: relaysh/aws-s3-step-bucket-create
   spec:
     aws: &aws
       connection: !Connection { type: aws, name: my-aws-account } 
-      region: us-east-1
+      region: !Parameter awsRegion
     name: !Parameter domainName
 
-- name: create-s3-subdomain-bucket
+- name: "Create Subdomain Bucket"
   image: relaysh/aws-s3-step-bucket-create
   spec:
     aws: *aws
     name: !Fn.concat ["www.", !Parameter domainName]
 
-- name: create-s3-logging-bucket
+- name: "Create Logging Bucket"
   image: relaysh/aws-s3-step-bucket-create
   spec:
     aws: *aws
     name: !Fn.concat ["logs.", !Parameter domainName]
 
-- name: create-s3-root-website-bucket
+- name: "Set Root Bucket as Website"
   image: bryanjbelanger/aws-s3-step-put-bucket-website 
   spec:
     aws: *aws
     bucketName: !Parameter domainName
+    redirectAllRequestsToHostName: ''
   dependsOn:
-    - create-s3-root-domain-bucket
+    - "Create Root Bucket"
 
-- name: create-s3-subdomain-website-bucket
+- name: "Set Subdomain Bucket as Redirect to Root"
   image: bryanjbelanger/aws-s3-step-put-bucket-website
   spec:
     aws: *aws
     bucketName: !Fn.concat ["www.", !Parameter domainName]
     redirectAllRequestsToHostName: !Parameter domainName
   dependsOn:
-    - create-s3-subdomain-bucket
+    - "Create Subdomain Bucket"
 
-
-- name: create-s3-root-delete-public-block
+- name: "Remove public block from root bucket"
   image: bryanjbelanger/aws-s3-step-delete-public-access-block
   spec:
     aws: *aws
     bucketName: !Parameter domainName
   dependsOn:
-    - create-s3-root-website-bucket
+    - "Create Root Bucket"
 
-- name: create-s3-logging-acl
+- name: "Set log delivery ACL on logging bucket"
   image: bryanjbelanger/aws-s3-step-put-bucket-acl
   spec:
     aws: *aws
@@ -81,9 +84,9 @@ steps:
         Permission: "READ_ACP"
     accessControlPolicyOwner: ''
   dependsOn:
-    - create-s3-logging-bucket
+    - "Create Logging Bucket"
 
-- name: create-s3-set-root-logging-bucket
+- name: "Set Log Bucket as Target for Root Bucket"
   image: bryanjbelanger/aws-s3-step-put-bucket-logging
   spec:
     aws: *aws
@@ -91,11 +94,11 @@ steps:
     targetBucket: !Fn.concat ["logs.", !Parameter domainName]
     targetPrefix: !Parameter loggingTargetPrefix
   dependsOn:
-    - create-s3-root-website-bucket
-    - create-s3-logging-acl
+    - "Create Root Bucket"
+    - "Set log delivery ACL on logging bucket"
 
-- name: upload-index-file
-  image: relaysh/aws-s3-step-bucket-upload-content
+- name: "Upload index.html"
+  image: bryanjbelanger/aws-s3-step-put-upload-content
   spec:
     aws: *aws
     bucket: !Parameter domainName
@@ -111,21 +114,56 @@ steps:
       </body>
       </html>
   dependsOn:
-    - create-s3-root-website-bucket
+    - "Create Root Bucket"
 
-- name: create-s3-set-root-bucket-policy
+- name: "Get Hosted Zone ID"
+  image: bryanjbelanger/aws-route53-get-hostedzoneid
+  spec:
+    aws: *aws
+    dnsName: !Parameter domainName
+
+- name: "Create A Record Sets"
+  image: bryanjbelanger/aws-route53-change-resource-record-set
+  spec:
+    aws: *aws
+    hostedZoneId: !Output ["Get Hosted Zone ID", hostedZoneId]
+    changeBatch:
+      Comment: "Setup A records"
+      Changes:
+        - Action: "UPSERT"
+          ResourceRecordSet:
+            Name: !Parameter domainName
+            Type: "A"
+            AliasTarget:
+              HostedZoneId: "Z3AQBSTGFYJSTF" # !Output [aws-route53-get-hostedzoneid, hostedZoneId]
+              DNSName: !Fn.concat ["s3-website-", !Parameter awsRegion, ".amazonaws.com."]
+              EvaluateTargetHealth: false
+        - Action: "UPSERT"
+          ResourceRecordSet:
+            Name: !Fn.concat ["www.", !Parameter domainName]
+            Type: "A"
+            AliasTarget:
+              HostedZoneId: "Z3AQBSTGFYJSTF" # !Output [aws-route53-get-hostedzoneid, hostedZoneId]
+              DNSName: !Fn.concat ["s3-website-", !Parameter awsRegion, ".amazonaws.com."]
+              EvaluateTargetHealth: false
+  dependsOn:
+    - "Set Root Bucket as Website"
+    - "Set Subdomain Bucket as Redirect to Root"
+
+- name: "Set Root Bucket Policy"
   image: bryanjbelanger/aws-s3-step-put-bucket-policy
   spec:
     aws: *aws
     bucketName: !Parameter domainName
     policy:
-      Version: "2020-07-01"
+      Version: "2012-10-17"
       Statement:
         Sid: "PublicReadGetObject"
         Effect: "Allow"
+        Principal: "*"
         Action:
           - "s3:GetObject"
         Resource:
           - !Fn.concat ["arn:aws:s3:::", !Parameter domainName, "/*"]
   dependsOn:
-    - create-s3-root-website-bucket
+    - "Create Root Bucket"
